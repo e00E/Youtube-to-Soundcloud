@@ -1,0 +1,9 @@
+{
+  "playlists": [
+    {
+      "youtube": "id of youtube playlist",
+      "soundcloud": "full soundcloud playlist url",
+      "position": 0
+    }
+  ]
+}

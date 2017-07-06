@@ -6,7 +6,7 @@ Install [Python](https://www.python.org/downloads/). If you are using the releas
 
 Run `pip install youtube-dl soundcloud six` to install required python dependencies.
 
-Youtube-dl might require [FFmpeg](https://ffmpeg.org/download.html) to correctly process some videos. If you are using the release Windows binary, download ffmpeg and put ffmpeg.exe in this applicaiton's folder.
+Youtube-dl might require [FFmpeg](https://ffmpeg.org/download.html) to correctly process some videos. If you are using the release Windows binary, download ffmpeg and put ffmpeg.exe in this application's folder.
 
 # Configuration
 The following files need to be edited before using the program:

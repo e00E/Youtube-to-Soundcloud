@@ -1,12 +1,13 @@
 extern crate reqwest;
-extern crate cpython;
 
+use std;
 use std::collections::HashMap;
-use cpython::{Python, PyDict, PyTuple, ObjectProtocol, ToPyObject, PythonObject};
 use util;
 
 const SOUNDCLOUD_API_TOKEN: &str = "https://api.soundcloud.com/oauth2/token";
 const SOUNDCLOUD_API_RESOLVE: &str = "https://api.soundcloud.com/resolve.json";
+const SOUNDCLOUD_API_UPLOAD: &str = "https://api.soundcloud.com/tracks";
+const SOUNDCLOUD_API_ME: &str = "https://api.soundcloud.com/me";
 
 #[derive(Debug, Deserialize)]
 pub struct AuthenticateResponse {
@@ -15,10 +16,6 @@ pub struct AuthenticateResponse {
 
 #[derive(Debug, Deserialize)]
 pub struct UploadResponse {}
-
-// TODO: handle refreshing tokens? or just get new token each upload? need to see what error
-// happens when token is too old
-
 
 #[derive(Debug, Deserialize)]
 pub struct ResolveResponse {
@@ -52,16 +49,28 @@ pub fn authenticate(
     params.insert("scope", "non-expiring");
     request_client
         .post(SOUNDCLOUD_API_TOKEN)
+        .unwrap()
         .form(&params)
+        .unwrap()
         .send()
-        .map_err(|err| format!("authenticate request failed: {}", err))
-        .and_then(util::handle_status_code)
-        .and_then(|mut response| {
-            let body: Result<AuthenticateResponse, String> = response.json().map_err(|err| {
-                format!("parsing of authenticate response failed: {}", err)
-            });
-            body
-        })
+        .map_err(|err| format!("failed to send authenticate request: {}", err))
+        .and_then(util::handle_status_code)?
+        .json()
+        .map_err(|err| format!("faield to parse authenticate response: {}", err))
+}
+
+pub fn is_token_valid(client_id: &str, access_token: &str, request_client: &reqwest::Client) -> Result<bool, String> {
+    let url = reqwest::Url::parse_with_params(
+        SOUNDCLOUD_API_ME,
+        &[("client_id", client_id),
+        ("oauth_token", access_token)]
+    ).expect("creation of me url failed");
+    Ok(request_client
+        .get(url)
+        .unwrap()
+        .send()
+        .map_err(|err| format!("failed to send resolve request: {}", err))?
+        .status().is_success())
 }
 
 pub fn resolve(url: &str, client_id: &str, request_client: &reqwest::Client) -> Result<ResolveResponse, String> {
@@ -71,14 +80,11 @@ pub fn resolve(url: &str, client_id: &str, request_client: &reqwest::Client) -> 
     ).expect("creation of resolve url failed");
     request_client
         .get(url)
+        .unwrap()
         .send()
-        .map_err(|err| format!("resolve request failed: {}", err))
-        .and_then(|mut response| {
-            let body: Result<ResolveResponse, String> = response
-                .json()
-                .map_err(|err| format!("parsing of resolve response failed: {}", err));
-            body
-        })
+        .map_err(|err| format!("failed to send resolve request: {}", err))?
+        .json()
+        .map_err(|err| format!("failed to parse resolve response: {}", err))
 }
 
 pub fn playlist_url_to_api_url(url: &str, client_id: &str, request_client: &reqwest::Client) -> Result<String, String> {
@@ -103,14 +109,12 @@ pub fn get_tracks(
     ).expect("creation of playlist url failed");
     request_client
         .get(url)
+        .unwrap()
         .send()
-        .map_err(|err| format!("get tracks request failed: {}", err))
-        .and_then(|mut response| {
-            let body: Result<PlaylistGetResponse, String> = response.json().map_err(|err| {
-                format!("parsing of get tracks response failed: {}", err)
-            });
-            body
-        })
+        .map_err(|err| format!("failed to send get tracks request: {}", err))
+        .and_then(util::handle_status_code)?
+        .json()
+        .map_err(|err| format!("failed to parse of get tracks response: {}", err))
 }
 
 pub fn add_to_playlist(
@@ -134,58 +138,57 @@ pub fn add_to_playlist(
     params.push(("playlist[tracks][][id]", track_id.to_string()));
     request_client
         .put(playlist_api_url)
+        .unwrap()
         .form(&params)
+        .unwrap()
         .send()
-        .map_err(|err| format!("playlist put request failed: {}", err))
+        .map_err(|err| format!("failed to send playlist put request: {}", err))
         .and_then(util::handle_status_code)
         .and_then(|_| Ok(()))
 }
 
-pub fn upload(
-    file_path: &str,
-    artwork_path: Option<&str>,
+pub fn upload<T: AsRef<std::path::Path>>(
+    file_path: T,
+    artwork_path: Option<T>,
     metadata: &HashMap<&str, &str>,
+    client_id: &str,
     access_token: &str,
+    request_client: &reqwest::Client,
 ) -> Result<u64, String> {
-    let gil = Python::acquire_gil();
-    let py = gil.python();
-    let soundcloud = py.import("soundcloud")
-        .expect("import of python soundcloud module failed");
-    let kwargs = PyDict::new(py);
-
-    kwargs.set_item(py, "access_token", access_token).unwrap();
-    let client = soundcloud
-        .call(py, "Client", PyTuple::empty(py), Some(&kwargs))
-        .unwrap();
-
-    let kwargs = PyDict::new(py);
-    let track = PyDict::new(py);
-    for (key, value) in metadata.iter() {
-        track.set_item(py, key, value).unwrap();
+    use reqwest::MultipartField;
+    let mut params = reqwest::MultipartRequest::new();
+    params.fields(vec![
+        MultipartField::param(
+            "client_id",
+            client_id.to_string()
+        ),
+        MultipartField::param(
+            "oauth_token",
+            access_token.to_string()
+        ),
+    ]);
+    for (key, value) in metadata {
+        params = params.field(MultipartField::param(
+            format!("track[{}]", key),
+            value.to_string(),
+        ));
     }
-    let file = py.eval(&format!("open(\"{}\", \"rb\")", file_path), None, None)
-        .expect(&format!("failed to open file {}", file_path));
-    track.set_item(py, "asset_data", file).unwrap();
-    match artwork_path {
-        Some(path) => {
-            let file = py.eval(&format!("open(\"{}\", \"rb\")", path), None, None)
-                .expect(&format!("failed to open file {}", path));
-            track.set_item(py, "artwork_data", file).unwrap();
-        }
-        _ => (),
+    // Not being able to access the specified files is a panic because the caller should have made
+    // sure that they exist
+    params = params.field(MultipartField::file("track[asset_data]", &file_path)
+        .map_err(|err| format!("failed to open audio file {}: {}", util::path_to_str(&file_path), err)).unwrap());
+    if let Some(artwork_path) = artwork_path {
+        params = params.field(MultipartField::file("track[artwork_data]", &artwork_path)
+            .map_err(|err| format!("failed to open artwork file {}: {}", util::path_to_str(&artwork_path), err)).unwrap());
     }
-    kwargs.set_item(py, "track", track).unwrap();
-
-    let track = client
-        .call_method(
-            py,
-            "post",
-            PyTuple::new(py, &["/tracks".to_py_object(py).into_object()]),
-            Some(&kwargs),
-        )
-        .map_err(|err| {
-            format!("Upload of file {} failed: {:?}", file_path, err)
-        })?;
-    let id: u64 = track.getattr(py, "id").unwrap().extract(py).unwrap();
-    Ok(id)
+    let track: Track = request_client
+        .post(SOUNDCLOUD_API_UPLOAD)
+        .unwrap()
+        .multipart(params)
+        .send()
+        .map_err(|err| format!("failed to send upload request: {}", err))
+        .and_then(util::handle_status_code)?
+        .json()
+        .map_err(|err| format!("failed to parse upload response: {}", err))?;
+    Ok(track.id)
 }

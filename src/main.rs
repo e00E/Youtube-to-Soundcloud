@@ -4,7 +4,6 @@ extern crate serde_derive;
 
 extern crate serde;
 extern crate serde_json;
-extern crate cpython;
 extern crate backoff;
 extern crate chrono;
 
@@ -25,27 +24,54 @@ fn default_backoff() -> backoff::ExponentialBackoff {
 }
 
 fn main() {
-    let config = config::read_config().expect("reading configuration file failed");
-    let mut client = reqwest::Client::new().unwrap();
+    let mut config = config::read_config().expect("reading configuration file failed");
+    let mut client = reqwest::ClientBuilder::new().unwrap();
     // Currently soundclouds playlisturl to api url needs redirects to be disabled for resolve to
     // work correctly.
     client.redirect(reqwest::RedirectPolicy::none());
     client.timeout(std::time::Duration::new(256, 0));
+    // For debugging with Fiddler:
+    // client.proxy(reqwest::Proxy::https("http://localhost:8888").unwrap());
+    let client = client.build().unwrap();
 
-    let mut op = || {
-        println!("Authenticating with Soundcloud.");
-        soundcloud::authenticate(
-            &config.soundcloud_client_id,
-            &config.soundcloud_client_secret,
-            &config.soundcloud_username,
-            &config.soundcloud_password,
-            &client,
-        ).map_err(|err| {
-            println!("Error: {}\nRetrying...", err);
-            backoff::Error::Transient(err)
-        })
+    println!("Checking validity of existing Soundcloud access token.");
+    let need_new_token = match config.soundcloud_access_token {
+        Some(ref access_token) => {
+            let mut op = || soundcloud::is_token_valid(&config.soundcloud_client_id, access_token, &client)
+                .map_err(|err| {
+                    println!("Error: {}\nRetrying...", err);
+                    backoff::Error::Transient(err)
+                });
+            !backoff::Operation::retry(&mut op, &mut default_backoff()).unwrap()
+        },
+        None => true
     };
-    let authentication = backoff::Operation::retry(&mut op, &mut default_backoff()).unwrap();
+    let access_token = if need_new_token {
+        let mut op = || {
+            println!("No valid existing access token found. Authenticating with Soundcloud.");
+            soundcloud::authenticate(
+                &config.soundcloud_client_id,
+                &config.soundcloud_client_secret,
+                &config.soundcloud_username,
+                &config.soundcloud_password,
+                &client,
+            ).map_err(|err| {
+                println!("Error: {}\nRetrying...", err);
+                backoff::Error::Transient(err)
+            })
+        };
+        Some(backoff::Operation::retry(&mut op, &mut default_backoff()).unwrap().access_token)
+    } else {
+        None
+    };
+    let access_token = match access_token {
+        Some(access_token) => {
+            config.soundcloud_access_token = Some(access_token.clone());
+            access_token
+        },
+        None => config.soundcloud_access_token.clone().unwrap()
+    };
+    config::write_config_safe(&config).expect("failed to write updated config file");
 
     // Load playlists
     let mut playlists = config::read_playlists().expect("reading playlists file failed");
@@ -67,27 +93,28 @@ fn main() {
 
 
         let url = std::cell::RefCell::new(
-            youtube::make_playlist_items_url(&playlist.youtube, &config.youtube_api_key).expect("creation of youtube playlist url failed"),
+            youtube::make_playlist_items_url(&playlist.youtube, &config.youtube_api_key)
+                .expect("creation of youtube playlist url failed"),
         );
         let previous_position = playlist.position;
         let mut op = || {
             client
                 .get(url.borrow().clone())
+                .unwrap()
                 .send()
                 .map_err(|err| format!("sending request failed: {}", err))
                 .and_then(util::handle_status_code)
                 .and_then(|mut response| {
-                    let body: Result<youtube::PlaylistItemsResource, String> = response
-                        .json()
-                        .map_err(|err| format!("parsing response failed: {}", err));
+                    let body: Result<youtube::PlaylistItemsResource, String> = response.json().map_err(|err| {
+                        format!("parsing response failed: {}", err)
+                    });
                     body
                 })
                 .and_then(|resource| {
                     let mut count: u64 = 0;
-                    for video in resource
-                        .items
-                        .iter()
-                        .filter(|x| x.snippet.position > previous_position)
+                    for video in resource.items.iter().filter(|x| {
+                        x.snippet.position > previous_position
+                    })
                     {
                         count += 1;
 
@@ -108,13 +135,13 @@ fn main() {
                         let mut op = || {
                             let url = &video.snippet.thumbnails.get_best_thumbnail().url;
                             let allowed_extensions = &["jpg", "png"];
-                            let start = url.rfind(".")
-                                .ok_or(backoff::Error::Permanent(
-                                    format!("thumbnail url {} has no extension", url),
-                                ))?;
+                            let start = url.rfind(".").ok_or(backoff::Error::Permanent(format!(
+                                "thumbnail url {} has no extension",
+                                url
+                            )))?;
                             let extension = &url[start + 1..];
                             if allowed_extensions.contains(&extension) {
-                                let path = format!("thumbnail.{}", extension);
+                                let path = format!("thumbnail.{}", extension).to_string();
                                 util::download_file(url, &path, &client)
                                     .map_err(|err| {
                                         println!("Error: {}\nRetrying...", err);
@@ -131,7 +158,7 @@ fn main() {
                             Ok(path) => Some(path),
                             Err(err) => {
                                 println!(
-                                    "Thumbnail download failed, it will not be uploaded to Soundcloud: {}.",
+                                    "Failed to retrieve thumbnail, it will not be uploaded to Soundcloud: {}.",
                                     err
                                 );
                                 None
@@ -171,12 +198,11 @@ fn main() {
                         let mut op = || {
                             soundcloud::upload(
                                 &filename,
-                                match thumbnail_path {
-                                    None => None,
-                                    Some(ref path) => Some(path),
-                                },
+                                thumbnail_path.as_ref(),
                                 &metadata,
-                                &authentication.access_token,
+                                &config.soundcloud_client_id,
+                                &access_token,
+                                &client,
                             ).map_err(|err| {
                                 println!("Error: {}\nRetrying...", err);
                                 backoff::Error::Transient(err)
@@ -184,22 +210,17 @@ fn main() {
                         };
                         let audio_id = backoff::Operation::retry(&mut op, &mut default_backoff()).unwrap();
 
-                        match thumbnail_path {
-                            Some(ref path) => {
-                                println!("Cleaning up thumbnail file.");
-                                match std::fs::remove_file(path) {
-                                    Err(err) => println!("Error: {}\nFile will remain on disk.", err),
-                                    _ => (),
-                                }
+                        if let Some(ref path) = thumbnail_path {
+                            println!("Cleaning up thumbnail file.");
+                            if let Err(err) = std::fs::remove_file(path) {
+                                println!("Error: {}\nFile will remain on disk.", err);
                             }
-                            None => (),
-                        }
+                        };
 
                         println!("Cleaning up audio file.");
-                        match std::fs::remove_file(&filename) {
-                            Err(err) => println!("Error: {}\nFile will remain on disk.", err),
-                            _ => (),
-                        }
+                        if let Err(err) = std::fs::remove_file(&filename) {
+                            println!("Error: {}\nFile will remain on disk.", err);
+                        };
 
                         println!(
                             "Adding uploaded audio track with id {} to Soundcloud playlist.",
@@ -210,7 +231,7 @@ fn main() {
                                 audio_id,
                                 &soundcloud_playlist_api_url,
                                 &config.soundcloud_client_id,
-                                &authentication.access_token,
+                                &access_token,
                                 &client,
                             ).map_err(|err| {
                                 println!("Error: {}\nRetrying...", err);
@@ -247,5 +268,5 @@ fn main() {
         }
         println!();
     }
-    config::write_playlists_safe(&playlists);
+    config::write_playlists_safe(&playlists).expect("failed to write updated playlists file");
 }

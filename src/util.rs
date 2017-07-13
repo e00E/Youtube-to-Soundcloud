@@ -3,6 +3,10 @@ extern crate reqwest;
 use std;
 use std::io::Read;
 
+pub fn path_to_str<T: AsRef<std::path::Path>>(path: T) -> String {
+    path.as_ref().to_string_lossy().into_owned()
+}
+
 pub fn handle_status_code(mut response: reqwest::Response) -> Result<reqwest::Response, String> {
     if response.status().is_success() {
         Ok(response)
@@ -17,9 +21,10 @@ pub fn handle_status_code(mut response: reqwest::Response) -> Result<reqwest::Re
     }
 }
 
-pub fn download_file(url: &str, path: &str, client: &reqwest::Client) -> Result<(), String> {
+pub fn download_file<T: AsRef<std::path::Path>>(url: &str, path: T, client: &reqwest::Client) -> Result<(), String> {
     client
         .get(url)
+        .unwrap()
         .send()
         .map_err(|err| {
             format!("download file request {} failed: {}", url, err)
@@ -29,11 +34,22 @@ pub fn download_file(url: &str, path: &str, client: &reqwest::Client) -> Result<
             let mut file = std::fs::OpenOptions::new()
                 .write(true)
                 .create(true)
-                .open(path)
-                .map_err(|err| format!("failed to open {}: {}", path, err))?;
+                .open(path.as_ref())
+                .map_err(|err| {
+                    format!(
+                        "failed to open {}: {}",
+                        path.as_ref().to_str().unwrap_or("undisplayable"),
+                        err
+                    )
+                })?;
             std::io::copy(&mut response, &mut file)
                 .map_err(|err| {
-                    format!("write of {} to file {} failed: {}", url, path, err)
+                    format!(
+                        "write of {} to file {} failed: {}",
+                        url,
+                        path.as_ref().to_str().unwrap_or("undisplayable"),
+                        err
+                    )
                 })
                 .and_then(|_| Ok(()))
         })

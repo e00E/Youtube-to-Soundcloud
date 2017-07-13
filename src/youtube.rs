@@ -26,10 +26,9 @@ pub fn download_audio(video_id: &str) -> Result<String, String> {
     if !output.status.success() {
         return Err("youtube-dl did not signal success".to_string());
     };
-    let stdout = std::str::from_utf8(&output.stdout)
-        .map_err(|err| {
-            format!("parsing of youtube-dl output failed: {}", err)
-        })?;
+    let stdout = std::str::from_utf8(&output.stdout).map_err(|err| {
+        format!("parsing of youtube-dl output failed: {}", err)
+    })?;
 
     let end = " has already been downloaded";
     let start = "[download] ";
@@ -40,9 +39,9 @@ pub fn download_audio(video_id: &str) -> Result<String, String> {
     }
 
     let target = "[download] Destination: ";
-    let start = stdout
-        .find(target)
-        .ok_or(format!("youtube-dl failed to download audio"))? + target.len();
+    let start = stdout.find(target).ok_or(format!(
+        "youtube-dl failed to download audio"
+    ))? + target.len();
     let end = stdout[start..].find("\n").unwrap();
     Ok(stdout[start..start + end].to_string())
 }

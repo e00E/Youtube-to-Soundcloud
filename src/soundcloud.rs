@@ -53,24 +53,30 @@ pub fn authenticate(
         .form(&params)
         .unwrap()
         .send()
-        .map_err(|err| format!("failed to send authenticate request: {}", err))
+        .map_err(|err| {
+            format!("failed to send authenticate request: {}", err)
+        })
         .and_then(util::handle_status_code)?
         .json()
-        .map_err(|err| format!("faield to parse authenticate response: {}", err))
+        .map_err(|err| {
+            format!("faield to parse authenticate response: {}", err)
+        })
 }
 
 pub fn is_token_valid(client_id: &str, access_token: &str, request_client: &reqwest::Client) -> Result<bool, String> {
     let url = reqwest::Url::parse_with_params(
         SOUNDCLOUD_API_ME,
-        &[("client_id", client_id),
-        ("oauth_token", access_token)]
+        &[("client_id", client_id), ("oauth_token", access_token)],
     ).expect("creation of me url failed");
-    Ok(request_client
-        .get(url)
-        .unwrap()
-        .send()
-        .map_err(|err| format!("failed to send resolve request: {}", err))?
-        .status().is_success())
+    Ok(
+        request_client
+            .get(url)
+            .unwrap()
+            .send()
+            .map_err(|err| format!("failed to send resolve request: {}", err))?
+            .status()
+            .is_success(),
+    )
 }
 
 pub fn resolve(url: &str, client_id: &str, request_client: &reqwest::Client) -> Result<ResolveResponse, String> {
@@ -114,7 +120,9 @@ pub fn get_tracks(
         .map_err(|err| format!("failed to send get tracks request: {}", err))
         .and_then(util::handle_status_code)?
         .json()
-        .map_err(|err| format!("failed to parse of get tracks response: {}", err))
+        .map_err(|err| {
+            format!("failed to parse of get tracks response: {}", err)
+        })
 }
 
 pub fn add_to_playlist(
@@ -142,7 +150,9 @@ pub fn add_to_playlist(
         .form(&params)
         .unwrap()
         .send()
-        .map_err(|err| format!("failed to send playlist put request: {}", err))
+        .map_err(|err| {
+            format!("failed to send playlist put request: {}", err)
+        })
         .and_then(util::handle_status_code)
         .and_then(|_| Ok(()))
 }
@@ -175,11 +185,29 @@ pub fn upload<T: AsRef<std::path::Path>>(
     }
     // Not being able to access the specified files is a panic because the caller should have made
     // sure that they exist
-    params = params.field(MultipartField::file("track[asset_data]", &file_path)
-        .map_err(|err| format!("failed to open audio file {}: {}", util::path_to_str(&file_path), err)).unwrap());
+    params = params.field(
+        MultipartField::file("track[asset_data]", &file_path)
+            .map_err(|err| {
+                format!(
+                    "failed to open audio file {}: {}",
+                    util::path_to_str(&file_path),
+                    err
+                )
+            })
+            .unwrap(),
+    );
     if let Some(artwork_path) = artwork_path {
-        params = params.field(MultipartField::file("track[artwork_data]", &artwork_path)
-            .map_err(|err| format!("failed to open artwork file {}: {}", util::path_to_str(&artwork_path), err)).unwrap());
+        params = params.field(
+            MultipartField::file("track[artwork_data]", &artwork_path)
+                .map_err(|err| {
+                    format!(
+                        "failed to open artwork file {}: {}",
+                        util::path_to_str(&artwork_path),
+                        err
+                    )
+                })
+                .unwrap(),
+        );
     }
     let track: Track = request_client
         .post(SOUNDCLOUD_API_UPLOAD)

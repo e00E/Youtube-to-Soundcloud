@@ -37,14 +37,15 @@ fn main() {
     println!("Checking validity of existing Soundcloud access token.");
     let need_new_token = match config.soundcloud_access_token {
         Some(ref access_token) => {
-            let mut op = || soundcloud::is_token_valid(&config.soundcloud_client_id, access_token, &client)
-                .map_err(|err| {
+            let mut op = || {
+                soundcloud::is_token_valid(&config.soundcloud_client_id, access_token, &client).map_err(|err| {
                     println!("Error: {}\nRetrying...", err);
                     backoff::Error::Transient(err)
-                });
+                })
+            };
             !backoff::Operation::retry(&mut op, &mut default_backoff()).unwrap()
-        },
-        None => true
+        }
+        None => true,
     };
     let access_token = if need_new_token {
         let mut op = || {
@@ -60,7 +61,11 @@ fn main() {
                 backoff::Error::Transient(err)
             })
         };
-        Some(backoff::Operation::retry(&mut op, &mut default_backoff()).unwrap().access_token)
+        Some(
+            backoff::Operation::retry(&mut op, &mut default_backoff())
+                .unwrap()
+                .access_token,
+        )
     } else {
         None
     };
@@ -68,8 +73,8 @@ fn main() {
         Some(access_token) => {
             config.soundcloud_access_token = Some(access_token.clone());
             access_token
-        },
-        None => config.soundcloud_access_token.clone().unwrap()
+        }
+        None => config.soundcloud_access_token.clone().unwrap(),
     };
     config::write_config_safe(&config).expect("failed to write updated config file");
 

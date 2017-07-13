@@ -40,9 +40,7 @@ pub fn read_playlists() -> Result<Playlists, String> {
         .read(true)
         .open(PLAYLISTS_FILE)
         .map_err(|err| format!("failed to open {}: {}", PLAYLISTS_FILE, err))?;
-    serde_json::from_reader(file).map_err(|err| {
-        format!("failed to parse {}: {}", PLAYLISTS_FILE, err)
-    })
+    serde_json::from_reader(file).map_err(|err| format!("failed to parse {}: {}", PLAYLISTS_FILE, err))
 }
 
 pub fn write_playlists(playlists: &Playlists, path: &str) -> Result<(), String> {
@@ -55,7 +53,15 @@ pub fn write_playlists(playlists: &Playlists, path: &str) -> Result<(), String> 
 }
 
 pub fn write_playlists_safe(playlists: &Playlists) -> Result<(), String> {
-    std::fs::rename(PLAYLISTS_FILE, PLAYLISTS_BACKUP_FILE).map_err(|err| format!("failed to rename {} to {}: {}", PLAYLISTS_FILE, PLAYLISTS_BACKUP_FILE, err))?;
+    std::fs::rename(PLAYLISTS_FILE, PLAYLISTS_BACKUP_FILE)
+        .map_err(|err| {
+            format!(
+                "failed to rename {} to {}: {}",
+                PLAYLISTS_FILE,
+                PLAYLISTS_BACKUP_FILE,
+                err
+            )
+        })?;
     write_playlists(&playlists, PLAYLISTS_FILE)
 }
 
@@ -79,6 +85,15 @@ pub fn write_config(config: &Config, path: &str) -> Result<(), String> {
 }
 
 pub fn write_config_safe(config: &Config) -> Result<(), String> {
-    std::fs::rename(CONFIG_FILE, CONFIG_BACKUP_FILE).map_err(|err| format!("failed to rename {} to {}: {}", CONFIG_FILE, CONFIG_BACKUP_FILE, err))?;
+    std::fs::rename(CONFIG_FILE, CONFIG_BACKUP_FILE).map_err(
+        |err| {
+            format!(
+                "failed to rename {} to {}: {}",
+                CONFIG_FILE,
+                CONFIG_BACKUP_FILE,
+                err
+            )
+        },
+    )?;
     write_config(&config, CONFIG_FILE)
 }

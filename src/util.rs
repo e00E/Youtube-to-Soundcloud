@@ -45,9 +45,9 @@ pub fn download_file<T: AsRef<std::path::Path>>(url: &str, path: T, client: &req
             std::io::copy(&mut response, &mut file)
                 .map_err(|err| {
                     format!(
-                        "write of {} to file {} failed: {}",
+                        "failed to write {} to file {}: {}",
                         url,
-                        path.as_ref().to_str().unwrap_or("undisplayable"),
+                        path_to_str(&path),
                         err
                     )
                 })

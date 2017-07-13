@@ -22,12 +22,12 @@ pub fn download_audio(video_id: &str) -> Result<String, String> {
         .args(&["-f", "bestaudio"])
         .arg("--restrict-filenames")
         .output()
-        .expect("execution of youtube-dl failed");
+        .expect("failed to run youtube-dl");
     if !output.status.success() {
         return Err("youtube-dl did not signal success".to_string());
     };
     let stdout = std::str::from_utf8(&output.stdout).map_err(|err| {
-        format!("parsing of youtube-dl output failed: {}", err)
+        format!("failed to parse youtube-dl output: {}", err)
     })?;
 
     let end = " has already been downloaded";
@@ -40,7 +40,7 @@ pub fn download_audio(video_id: &str) -> Result<String, String> {
 
     let target = "[download] Destination: ";
     let start = stdout.find(target).ok_or(format!(
-        "youtube-dl failed to download audio"
+        "youtube-dl failed to download anything"
     ))? + target.len();
     let end = stdout[start..].find("\n").unwrap();
     Ok(stdout[start..start + end].to_string())

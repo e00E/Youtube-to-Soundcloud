@@ -2,7 +2,9 @@
 This program exports Youtube playlists to Soundcloud playlists and is meant to run without user interaction. When run, it will copy the audio of new videos in the Youtube playlists to the corresponding Soundcloud playlists.
 
 # Installation
-Install [youtube-dl](https://rg3.github.io/youtube-dl/download.html). If you are using the Windows release, download `Windows_exe` via the previous link and put youtube-dl.exe in this application's folder.
+Install the [Microsoft Visual C++ Redistributable for Visual Studio 2017](https://go.microsoft.com/fwlink/?LinkId=746572).
+
+Install [youtube-dl](https://rg3.github.io/youtube-dl/download.html). If you are using the Windows release, download `Windows_exe` via the previous link and put youtube-dl.exe in this application's folder. You also need the [Microsoft Visual C++ 2010 Redistributable Package (x86)](https://www.microsoft.com/en-US/download/details.aspx?id=5555) for youtube-dl to work.
 
 Youtube-dl might require [FFmpeg](https://ffmpeg.org/download.html) to correctly process some videos. If you are using the Windows release, download FFmpeg (at the time of writing the current version is [here](http://ffmpeg.zeranoe.com/builds/win64/static/ffmpeg-3.3.2-win64-static.zip)) and put `ffmpeg.exe` in this application's folder.
 

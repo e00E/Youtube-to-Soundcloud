@@ -24,7 +24,7 @@ fn default_backoff() -> backoff::ExponentialBackoff {
 }
 
 fn main() {
-    let mut config = config::read_config().expect("reading configuration file failed");
+    let mut config = config::Config::read().expect("reading configuration file failed");
     let mut client = reqwest::ClientBuilder::new().unwrap();
     // Currently soundclouds playlisturl to api url needs redirects to be disabled for resolve to
     // work correctly.
@@ -76,32 +76,32 @@ fn main() {
         }
         None => config.soundcloud_access_token.clone().unwrap(),
     };
-    config::write_config_safe(&config).expect("failed to write updated config file");
+    config.write_safe().expect("failed to write updated config file");
 
     // Load playlists
-    let mut playlists = config::read_playlists().expect("reading playlists file failed");
+    let playlists = std::cell::RefCell::new(config::Playlists::read().expect("reading playlists file failed"));
 
-    println!("Checking youtube playlists for new videos.");
-    for playlist in playlists.playlists.iter_mut() {
+    println!("Checking youtube playlists for new videos.\n");
+    for i in 0..playlists.borrow().playlists.len() {
         println!(
             "Starting work on Youtube playlist with id: {}.",
-            playlist.youtube
+            playlists.borrow().playlists[i].youtube
         );
 
         let soundcloud_playlist_api_url =
-            soundcloud::playlist_url_to_api_url(&playlist.soundcloud, &config.soundcloud_client_id, &client).expect(
+            soundcloud::playlist_url_to_api_url(&playlists.borrow().playlists[i].soundcloud, &config.soundcloud_client_id, &client).expect(
                 format!(
                     "turning Soundcloud playlist url {} into api url failed.",
-                    playlist.soundcloud
+                    playlists.borrow().playlists.get(i).unwrap().soundcloud
                 ).as_str(),
             );
 
 
         let url = std::cell::RefCell::new(
-            youtube::make_playlist_items_url(&playlist.youtube, &config.youtube_api_key)
+            youtube::make_playlist_items_url(&playlists.borrow().playlists.get(i).unwrap().youtube, &config.youtube_api_key)
                 .expect("creation of youtube playlist url failed"),
         );
-        let previous_position = playlist.position;
+        let previous_position = playlists.borrow().playlists[i].position.get();
         let mut op = || {
             client
                 .get(url.borrow().clone())
@@ -244,12 +244,16 @@ fn main() {
                             })
                         };
                         backoff::Operation::retry(&mut op, &mut default_backoff()).unwrap();
+
+                        let ref playlist = playlists.borrow().playlists[i];
+                        playlist.position.set(playlist.position.get() + 1);
+                        playlists.borrow().write_safe().expect("failed to write updated playlists file");
                     }
                     Ok((resource.nextPageToken, count))
                 })
                 .map_err(|err| {
                     println!(
-                        "Receiving some of the youtube playlist data failed: {}\nRetrying...",
+                        "Failed to receive some of the youtube playlist data: {}\nRetrying...",
                         err
                     );
                     backoff::Error::Transient(err)
@@ -258,12 +262,12 @@ fn main() {
         loop {
             match backoff::Operation::retry(&mut op, &mut default_backoff()).unwrap() {
                 (None, count) => {
-                    playlist.position += count;
+                    //playlist.position += count;
                     break;
                 }
                 (Some(token), count) => {
-                    playlist.position += count;
-                    let mut new_url = youtube::make_playlist_items_url(&playlist.youtube, &config.youtube_api_key)
+                    //playlist.position += count;
+                    let mut new_url = youtube::make_playlist_items_url(&playlists.borrow().playlists.get(i).unwrap().youtube, &config.youtube_api_key)
                         .expect("creation youtube playlist url failed");
                     new_url.query_pairs_mut().append_pair("pageToken", &token);
                     *url.borrow_mut() = new_url;
@@ -271,7 +275,7 @@ fn main() {
                 }
             }
         }
-        println!();
+        println!("Done.\n");
     }
-    config::write_playlists_safe(&playlists).expect("failed to write updated playlists file");
+   // playlists.write_safe().expect("failed to write updated playlists file");
 }

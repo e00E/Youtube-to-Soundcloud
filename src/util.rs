@@ -1,22 +1,22 @@
 extern crate reqwest;
 
 use std;
-use std::io::Read;
+// use std::io::Read;
 
 pub fn path_to_str<T: AsRef<std::path::Path>>(path: T) -> String {
     path.as_ref().to_string_lossy().into_owned()
 }
 
-pub fn handle_status_code(mut response: reqwest::Response) -> Result<reqwest::Response, String> {
+pub fn handle_status_code(response: reqwest::Response) -> Result<reqwest::Response, String> {
     if response.status().is_success() {
         Ok(response)
     } else {
-        let mut body: String = String::new();
-        let result = response.read_to_string(&mut body);
+        // let mut body: String = String::new();
+        // let result = response.read_to_string(&mut body);
         Err(format!(
-            "response has bad status code: {}, body: {}",
+            "response has bad status code: {}",//, body: {}",
             response.status(),
-            if result.is_ok() { body } else { body }
+            //if result.is_ok() { body } else { body }
         ))
     }
 }

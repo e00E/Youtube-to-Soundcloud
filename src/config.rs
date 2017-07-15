@@ -32,68 +32,72 @@ pub struct Playlist {
     pub youtube: String,
     pub soundcloud: String,
     #[serde(default)]
-    pub position: u64,
+    pub position: std::cell::Cell<u64>,
 }
 
-pub fn read_playlists() -> Result<Playlists, String> {
-    let file = std::fs::OpenOptions::new()
-        .read(true)
-        .open(PLAYLISTS_FILE)
-        .map_err(|err| format!("failed to open {}: {}", PLAYLISTS_FILE, err))?;
-    serde_json::from_reader(file).map_err(|err| format!("failed to parse {}: {}", PLAYLISTS_FILE, err))
+impl Playlists {
+    pub fn read() -> Result<Playlists, String> {
+        let file = std::fs::OpenOptions::new()
+            .read(true)
+            .open(PLAYLISTS_FILE)
+            .map_err(|err| format!("failed to open {}: {}", PLAYLISTS_FILE, err))?;
+        serde_json::from_reader(file).map_err(|err| format!("failed to parse {}: {}", PLAYLISTS_FILE, err))
+    }
+
+    pub fn write(&self, path: &str) -> Result<(), String> {
+        let file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(path)
+            .map_err(|err| format!("failed to open {}: {}", path, err))?;
+        serde_json::to_writer_pretty(file, self).map_err(|err| format!("failed to write to {}: {}", path, err))
+    }
+
+    pub fn write_safe(&self) -> Result<(), String> {
+        std::fs::rename(PLAYLISTS_FILE, PLAYLISTS_BACKUP_FILE)
+            .map_err(|err| {
+                format!(
+                    "failed to rename {} to {}: {}",
+                    PLAYLISTS_FILE,
+                    PLAYLISTS_BACKUP_FILE,
+                    err
+                )
+            })?;
+        self.write(PLAYLISTS_FILE)
+    }
 }
 
-pub fn write_playlists(playlists: &Playlists, path: &str) -> Result<(), String> {
-    let file = std::fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(path)
-        .map_err(|err| format!("failed to open {}: {}", path, err))?;
-    serde_json::to_writer_pretty(file, playlists).map_err(|err| format!("failed to write to {}: {}", path, err))
-}
+impl Config {
+    pub fn read() -> Result<Config, String> {
+        let path = CONFIG_FILE;
+        let file = std::fs::OpenOptions::new().read(true).open(path).map_err(
+            |err| {
+                format!("failed to open {}: {}", path, err)
+            },
+        )?;
+        serde_json::from_reader(file).map_err(|err| format!("failed to parse {}: {}", path, err))
+    }
 
-pub fn write_playlists_safe(playlists: &Playlists) -> Result<(), String> {
-    std::fs::rename(PLAYLISTS_FILE, PLAYLISTS_BACKUP_FILE)
-        .map_err(|err| {
-            format!(
-                "failed to rename {} to {}: {}",
-                PLAYLISTS_FILE,
-                PLAYLISTS_BACKUP_FILE,
-                err
-            )
-        })?;
-    write_playlists(&playlists, PLAYLISTS_FILE)
-}
+    pub fn write(&self, path: &str) -> Result<(), String> {
+        let file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(path)
+            .map_err(|err| format!("failed to open {}: {}", path, err))?;
+        serde_json::to_writer_pretty(file, self).map_err(|err| format!("failed to write to {}: {}", path, err))
+    }
 
-pub fn read_config() -> Result<Config, String> {
-    let path = CONFIG_FILE;
-    let file = std::fs::OpenOptions::new().read(true).open(path).map_err(
-        |err| {
-            format!("failed to open {}: {}", path, err)
-        },
-    )?;
-    serde_json::from_reader(file).map_err(|err| format!("failed to parse {}: {}", path, err))
-}
-
-pub fn write_config(config: &Config, path: &str) -> Result<(), String> {
-    let file = std::fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(path)
-        .map_err(|err| format!("failed to open {}: {}", path, err))?;
-    serde_json::to_writer_pretty(file, config).map_err(|err| format!("failed to write to {}: {}", path, err))
-}
-
-pub fn write_config_safe(config: &Config) -> Result<(), String> {
-    std::fs::rename(CONFIG_FILE, CONFIG_BACKUP_FILE).map_err(
-        |err| {
-            format!(
-                "failed to rename {} to {}: {}",
-                CONFIG_FILE,
-                CONFIG_BACKUP_FILE,
-                err
-            )
-        },
-    )?;
-    write_config(&config, CONFIG_FILE)
+    pub fn write_safe(&self) -> Result<(), String> {
+        std::fs::rename(CONFIG_FILE, CONFIG_BACKUP_FILE).map_err(
+            |err| {
+                format!(
+                    "failed to rename {} to {}: {}",
+                    CONFIG_FILE,
+                    CONFIG_BACKUP_FILE,
+                    err
+                )
+            },
+        )?;
+        self.write(CONFIG_FILE)
+    }
 }

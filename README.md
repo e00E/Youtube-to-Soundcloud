@@ -2,9 +2,9 @@
 This program exports Youtube playlists to Soundcloud playlists and is meant to run without user interaction. When run, it will copy the audio of new videos in the Youtube playlists to the corresponding Soundcloud playlists.
 
 # Installation
-Install [youtube-dl](https://rg3.github.io/youtube-dl/download.html). If you are using the Windows release, download Windows_exe via the previous link and put youtube-dl.exe in this application's folder.
+Install [youtube-dl](https://rg3.github.io/youtube-dl/download.html). If you are using the Windows release, download `Windows_exe` via the previous link and put youtube-dl.exe in this application's folder.
 
-Youtube-dl might require [FFmpeg](https://ffmpeg.org/download.html) to correctly process some videos. If you are using the Windows release, download ffmpeg (at the time of writing the current version is [here](http://ffmpeg.zeranoe.com/builds/win64/static/ffmpeg-3.3.2-win64-static.zip)) and put ffmpeg.exe in this application's folder.
+Youtube-dl might require [FFmpeg](https://ffmpeg.org/download.html) to correctly process some videos. If you are using the Windows release, download FFmpeg (at the time of writing the current version is [here](http://ffmpeg.zeranoe.com/builds/win64/static/ffmpeg-3.3.2-win64-static.zip)) and put `ffmpeg.exe` in this application's folder.
 
 # Configuration
 The following files need to be edited before using the program:
@@ -19,7 +19,7 @@ The following files need to be edited before using the program:
 * `soundcloud_password` is your Soundcloud password
 * `youtube_api_key` is your Youtube api key
 
-Ordinarily we would not use username and password directly and instead use oauth but that requires a domain and server while this application is meant to run locally.
+Ordinarily we would use oauth instead of username and password but that requires a domain and server while this application is meant to be run locally.
 
 ## playlists.json
 * `playlists` is a list of playlists

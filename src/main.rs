@@ -23,8 +23,8 @@ fn default_backoff() -> backoff::ExponentialBackoff {
     }
 }
 
-fn main() {
-    let mut config = config::Config::read().expect("reading configuration file failed");
+fn run() -> Result<(), String> {
+    let mut config = config::Config::read()?;
     let mut client = reqwest::ClientBuilder::new().unwrap();
     // Currently soundclouds playlisturl to api url needs redirects to be disabled for resolve to
     // work correctly.
@@ -72,57 +72,68 @@ fn main() {
     let access_token = match access_token {
         Some(access_token) => {
             config.soundcloud_access_token = Some(access_token.clone());
+            config.write_safe()?;
             access_token
         }
         None => config.soundcloud_access_token.clone().unwrap(),
     };
-    config.write_safe().expect("failed to write updated config file");
 
     // Load playlists
-    let playlists = std::cell::RefCell::new(config::Playlists::read().expect("reading playlists file failed"));
+    let playlists = config::Playlists::read()?;
 
-    println!("Checking youtube playlists for new videos.\n");
-    for i in 0..playlists.borrow().playlists.len() {
+    println!();
+    for playlist in playlists.playlists.iter() {
         println!(
             "Starting work on Youtube playlist with id: {}.",
-            playlists.borrow().playlists[i].youtube
+            playlist.youtube,
         );
 
-        let soundcloud_playlist_api_url =
-            soundcloud::playlist_url_to_api_url(&playlists.borrow().playlists[i].soundcloud, &config.soundcloud_client_id, &client).expect(
-                format!(
-                    "turning Soundcloud playlist url {} into api url failed.",
-                    playlists.borrow().playlists.get(i).unwrap().soundcloud
-                ).as_str(),
-            );
+        println!("Resolving Soundcloud playlist url {}.", playlist.soundcloud);
+        let mut op = || {
+            soundcloud::playlist_url_to_api_url(&playlist.soundcloud, &config.soundcloud_client_id, &client)
+                .map_err(|err| {
+                    println!("Error: {}\nRetrying...", err);
+                    backoff::Error::Transient(err)
+                })
+        };
+        let soundcloud_playlist_api_url = match backoff::Operation::retry(&mut op, &mut default_backoff()).unwrap() {
+            Some(url) => url,
+            None => {
+                return Err(format!(
+                    "The Soundcloud playlist url is not valid. \
+                    Make sure you correctly set the full url in the config file."
+                ));
+            }
+        };
 
 
-        let url = std::cell::RefCell::new(
-            youtube::make_playlist_items_url(&playlists.borrow().playlists.get(i).unwrap().youtube, &config.youtube_api_key)
-                .expect("creation of youtube playlist url failed"),
-        );
-        let previous_position = playlists.borrow().playlists[i].position.get();
+        let url = std::cell::RefCell::new(youtube::make_playlist_items_url(
+            &playlist.youtube,
+            &config.youtube_api_key,
+        ).map_err(|err| {
+            format!("failed to create youtube playlist url: {}", err)
+        })?);
+        let previous_position = playlist.position.get();
         let mut op = || {
             client
                 .get(url.borrow().clone())
                 .unwrap()
                 .send()
-                .map_err(|err| format!("sending request failed: {}", err))
+                .map_err(|err| {
+                    format!("failed to send youtube playlist get request: {}", err)
+                })
                 .and_then(util::handle_status_code)
                 .and_then(|mut response| {
                     let body: Result<youtube::PlaylistItemsResource, String> = response.json().map_err(|err| {
-                        format!("parsing response failed: {}", err)
+                        format!("failed to parse youtube playlist get response: {}", err)
                     });
                     body
                 })
                 .and_then(|resource| {
-                    let mut count: u64 = 0;
                     for video in resource.items.iter().filter(|x| {
                         x.snippet.position > previous_position
                     })
                     {
-                        count += 1;
-
                         println!(
                             "Downloading new video with id {} and title {}.",
                             &video.contentDetails.videoId,
@@ -192,7 +203,7 @@ fn main() {
                             }
                             Err(err) => {
                                 println!(
-                                    "Parsing of timedate string {} failed, \
+                                    "Failed to parse timedate string {}, \
                                      release date will not be set on Soundcloud: {}.",
                                     &video.snippet.publishedAt,
                                     err
@@ -245,11 +256,12 @@ fn main() {
                         };
                         backoff::Operation::retry(&mut op, &mut default_backoff()).unwrap();
 
-                        let ref playlist = playlists.borrow().playlists[i];
+                        // Save new playlist position
+                        let ref playlist = playlist;
                         playlist.position.set(playlist.position.get() + 1);
-                        playlists.borrow().write_safe().expect("failed to write updated playlists file");
+                        playlists.write_safe()?;
                     }
-                    Ok((resource.nextPageToken, count))
+                    Ok(resource.nextPageToken)
                 })
                 .map_err(|err| {
                     println!(
@@ -261,21 +273,27 @@ fn main() {
         };
         loop {
             match backoff::Operation::retry(&mut op, &mut default_backoff()).unwrap() {
-                (None, count) => {
-                    //playlist.position += count;
-                    break;
-                }
-                (Some(token), count) => {
-                    //playlist.position += count;
-                    let mut new_url = youtube::make_playlist_items_url(&playlists.borrow().playlists.get(i).unwrap().youtube, &config.youtube_api_key)
-                        .expect("creation youtube playlist url failed");
+                Some(token) => {
+                    let mut new_url = youtube::make_playlist_items_url(&playlist.youtube, &config.youtube_api_key)
+                        .map_err(|err| {
+                            format!("failed to create youtube playlist url: {}", err)
+                        })?;
                     new_url.query_pairs_mut().append_pair("pageToken", &token);
                     *url.borrow_mut() = new_url;
                     continue;
+                }
+                None => {
+                    break;
                 }
             }
         }
         println!("Done.\n");
     }
-   // playlists.write_safe().expect("failed to write updated playlists file");
+    Ok(())
+}
+
+fn main() {
+    if let Err(err) = run() {
+        println!("Error: {}", err);
+    }
 }

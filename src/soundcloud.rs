@@ -19,7 +19,6 @@ pub struct UploadResponse {}
 
 #[derive(Debug, Deserialize)]
 pub struct ResolveResponse {
-    status: String,
     location: String,
 }
 
@@ -79,29 +78,36 @@ pub fn is_token_valid(client_id: &str, access_token: &str, request_client: &reqw
     )
 }
 
-pub fn resolve(url: &str, client_id: &str, request_client: &reqwest::Client) -> Result<ResolveResponse, String> {
+pub fn resolve(
+    url: &str,
+    client_id: &str,
+    request_client: &reqwest::Client,
+) -> Result<Option<ResolveResponse>, String> {
+    use reqwest::StatusCode;
     let url = reqwest::Url::parse_with_params(
         SOUNDCLOUD_API_RESOLVE,
         &[("url", url), ("client_id", client_id)],
     ).expect("creation of resolve url failed");
-    request_client
-        .get(url)
-        .unwrap()
-        .send()
-        .map_err(|err| format!("failed to send resolve request: {}", err))?
-        .json()
-        .map_err(|err| format!("failed to parse resolve response: {}", err))
+    let mut response = request_client.get(url).unwrap().send().map_err(|err| {
+        format!("failed to send resolve request: {}", err)
+    })?;
+    match response.status() {
+        StatusCode::NotFound => Ok(None),
+        StatusCode::Found => {
+            response.json().map_err(|err| {
+                format!("failed to parse resolve response: {}", err)
+            })
+        }
+        other => Err(format!("response has bad status code: {}", other)),
+    }
 }
 
-pub fn playlist_url_to_api_url(url: &str, client_id: &str, request_client: &reqwest::Client) -> Result<String, String> {
-    resolve(url, client_id, request_client).and_then(|response| if response.status == "302 - Found" {
-        Ok(response.location)
-    } else {
-        Err(format!(
-            "resolve response status is not 302 but {}",
-            response.status
-        ))
-    })
+pub fn playlist_url_to_api_url(
+    url: &str,
+    client_id: &str,
+    request_client: &reqwest::Client,
+) -> Result<Option<String>, String> {
+    resolve(url, client_id, request_client).and_then(|response| Ok(response.map(|response| response.location)))
 }
 
 pub fn get_tracks(

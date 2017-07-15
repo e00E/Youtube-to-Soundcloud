@@ -5,10 +5,10 @@
       "soundcloud": "full soundcloud playlist url",
       "position": 0
     },
-		{
+    {
       "youtube": "id of another youtube playlist",
       "soundcloud": "another full soundcloud playlist url",
       "position": 0
-		}
+    }
   ]
 }

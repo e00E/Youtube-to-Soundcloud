@@ -30,4 +30,7 @@ Ordinarily we would use oauth instead of username and password but that requires
 * `position` is a positive integer which describes the index of the most recently transferred video in the youtube playlist
 
 For new playlists, position should be set to 0 since Youtube playlists start at index 1. This application *only* considers the index to determine if a video needs to be moved to Soundcloud. This means that Youtube playlists need to have the oldest video at the lowest index and the newest video at the highest index.
-If you were to set position to 5, then this application would start with the 6th video.
+
+If you were to for example set position to 5, then this application would start with the 6th video.
+
+Once you have set up `playlists.json`, it will be updated automatically as this application completes audio exports, but you can still make manual changes if you want to.

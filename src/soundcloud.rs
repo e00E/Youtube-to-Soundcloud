@@ -3,6 +3,7 @@ extern crate reqwest;
 use std;
 use std::collections::HashMap;
 use util;
+use reqwest::StatusCode;
 
 const SOUNDCLOUD_API_TOKEN: &str = "https://api.soundcloud.com/oauth2/token";
 const SOUNDCLOUD_API_RESOLVE: &str = "https://api.soundcloud.com/resolve.json";
@@ -38,7 +39,7 @@ pub fn authenticate(
     username: &str,
     password: &str,
     request_client: &reqwest::Client,
-) -> Result<AuthenticateResponse, String> {
+) -> Result<Option<AuthenticateResponse>, String> {
     let mut params = HashMap::new();
     params.insert("client_id", client_id);
     params.insert("client_secret", client_secret);
@@ -46,7 +47,7 @@ pub fn authenticate(
     params.insert("password", password);
     params.insert("grant_type", "password");
     params.insert("scope", "non-expiring");
-    request_client
+    let mut response = request_client
         .post(SOUNDCLOUD_API_TOKEN)
         .unwrap()
         .form(&params)
@@ -54,12 +55,16 @@ pub fn authenticate(
         .send()
         .map_err(|err| {
             format!("failed to send authenticate request: {}", err)
-        })
-        .and_then(util::handle_status_code)?
-        .json()
-        .map_err(|err| {
-            format!("faield to parse authenticate response: {}", err)
-        })
+        })?;
+    match response.status() {
+        StatusCode::Unauthorized => Ok(None),
+        other if other.is_success() => {
+            response.json().map_err(|err| {
+                format!("failed to parse authenticate response: {}", err)
+            })
+        }
+        other => Err(format!("response has bad status code: {}", other)),
+    }
 }
 
 pub fn is_token_valid(client_id: &str, access_token: &str, request_client: &reqwest::Client) -> Result<bool, String> {
@@ -67,15 +72,14 @@ pub fn is_token_valid(client_id: &str, access_token: &str, request_client: &reqw
         SOUNDCLOUD_API_ME,
         &[("client_id", client_id), ("oauth_token", access_token)],
     ).expect("creation of me url failed");
-    Ok(
-        request_client
-            .get(url)
-            .unwrap()
-            .send()
-            .map_err(|err| format!("failed to send resolve request: {}", err))?
-            .status()
-            .is_success(),
-    )
+    let response = request_client.get(url).unwrap().send().map_err(|err| {
+        format!("failed to send resolve request: {}", err)
+    })?;
+    match response.status() {
+        StatusCode::Unauthorized => Ok(false),
+        other if other.is_success() => Ok(true),
+        other => Err(format!("response has bad status code: {}", other)),
+    }
 }
 
 pub fn resolve(
@@ -83,7 +87,6 @@ pub fn resolve(
     client_id: &str,
     request_client: &reqwest::Client,
 ) -> Result<Option<ResolveResponse>, String> {
-    use reqwest::StatusCode;
     let url = reqwest::Url::parse_with_params(
         SOUNDCLOUD_API_RESOLVE,
         &[("url", url), ("client_id", client_id)],
@@ -163,9 +166,9 @@ pub fn add_to_playlist(
         .and_then(|_| Ok(()))
 }
 
-pub fn upload<T: AsRef<std::path::Path>>(
+pub fn upload<T: AsRef<std::path::Path>, U: AsRef<std::path::Path>>(
     file_path: T,
-    artwork_path: Option<T>,
+    artwork_path: &Option<U>,
     metadata: &HashMap<&str, &str>,
     client_id: &str,
     access_token: &str,
@@ -202,13 +205,13 @@ pub fn upload<T: AsRef<std::path::Path>>(
             })
             .unwrap(),
     );
-    if let Some(artwork_path) = artwork_path {
+    if let &Some(ref artwork_path) = artwork_path {
         params = params.field(
-            MultipartField::file("track[artwork_data]", &artwork_path)
+            MultipartField::file("track[artwork_data]", artwork_path)
                 .map_err(|err| {
                     format!(
                         "failed to open artwork file {}: {}",
-                        util::path_to_str(&artwork_path),
+                        util::path_to_str(artwork_path),
                         err
                     )
                 })

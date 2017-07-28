@@ -27,9 +27,9 @@ Ordinarily we would use oauth instead of username and password but that requires
 * `playlists` is a list of playlists
 * `youtube` is the ID of a youtube playlist
 * `soundcloud` is the full url to a soundcloud playlist
-* `position` is a positive integer which describes the index of the most recently transferred video in the youtube playlist
+* `position` is a positive integer which describes the zero based index (the first video has index 0) of the next video in the youtube playlist which should be transferred to soundcloud.
 
-For new playlists, position should be set to 0 since Youtube playlists start at index 1. This application *only* considers the index to determine if a video needs to be moved to Soundcloud. This means that Youtube playlists need to have the oldest video at the lowest index and the newest video at the highest index.
+For new playlists, position should be set to 0, since the very first video should be transferred to Soundcloud next. This application *only* considers the index to determine if a video needs to be moved to Soundcloud. This means that Youtube playlists need to have the oldest video at the lowest index and the newest video at the highest index.
 
 If you were to for example set position to 5, then this application would start with the 6th video.
 

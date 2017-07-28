@@ -311,7 +311,7 @@ impl App {
                 let resource = self.get_youtube_playlist_data(url.clone())?;
 
                 for video in resource.items.iter().filter(|x| {
-                    x.snippet.position > previous_position
+                    x.snippet.position >= previous_position
                 })
                 {
                     let filename = App::download_audio(&video);

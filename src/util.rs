@@ -24,7 +24,6 @@ pub fn handle_status_code(response: reqwest::Response) -> Result<reqwest::Respon
 pub fn download_file<T: AsRef<std::path::Path>>(url: &str, path: T, client: &reqwest::Client) -> Result<(), String> {
     client
         .get(url)
-        .unwrap()
         .send()
         .map_err(|err| format!("download file request {} failed: {}", url, err))
         .and_then(handle_status_code)

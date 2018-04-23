@@ -33,7 +33,7 @@ struct App {
 impl App {
     fn new() -> Result<App, String> {
         let mut config = config::Config::read()?;
-        let mut client = reqwest::ClientBuilder::new().unwrap();
+        let mut client = reqwest::ClientBuilder::new();
         // Currently soundclouds playlisturl to api url needs redirects to be disabled for resolve to
         // work correctly.
         client.redirect(reqwest::RedirectPolicy::none());
@@ -152,7 +152,6 @@ impl App {
         let mut op = || -> Result<youtube::PlaylistItemsResource, backoff::Error<String>> {
             self.client
                 .get(url.clone())
-                .unwrap()
                 .send()
                 .map_err(|err| {
                     backoff::Error::Transient(format!("failed to send youtube playlist get request: {}", err))

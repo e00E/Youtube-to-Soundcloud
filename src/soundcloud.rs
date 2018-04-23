@@ -49,9 +49,7 @@ pub fn authenticate(
     params.insert("scope", "non-expiring");
     let mut response = request_client
         .post(SOUNDCLOUD_API_TOKEN)
-        .unwrap()
         .form(&params)
-        .unwrap()
         .send()
         .map_err(|err| format!("failed to send authenticate request: {}", err))?;
     match response.status() {
@@ -70,7 +68,6 @@ pub fn is_token_valid(client_id: &str, access_token: &str, request_client: &reqw
     ).expect("creation of me url failed");
     let response = request_client
         .get(url)
-        .unwrap()
         .send()
         .map_err(|err| format!("failed to send resolve request: {}", err))?;
     match response.status() {
@@ -89,7 +86,6 @@ pub fn resolve(
         .expect("creation of resolve url failed");
     let mut response = request_client
         .get(url)
-        .unwrap()
         .send()
         .map_err(|err| format!("failed to send resolve request: {}", err))?;
     match response.status() {
@@ -118,7 +114,6 @@ pub fn get_tracks(
         .expect("creation of playlist url failed");
     request_client
         .get(url)
-        .unwrap()
         .send()
         .map_err(|err| format!("failed to send get tracks request: {}", err))
         .and_then(util::handle_status_code)?
@@ -146,9 +141,7 @@ pub fn add_to_playlist(
     params.push(("playlist[tracks][][id]", track_id.to_string()));
     request_client
         .put(playlist_api_url)
-        .unwrap()
         .form(&params)
-        .unwrap()
         .send()
         .map_err(|err| format!("failed to send playlist put request: {}", err))
         .and_then(util::handle_status_code)
@@ -163,38 +156,32 @@ pub fn upload<T: AsRef<std::path::Path>, U: AsRef<std::path::Path>>(
     access_token: &str,
     request_client: &reqwest::Client,
 ) -> Result<u64, String> {
-    use reqwest::MultipartField;
-    let mut params = reqwest::MultipartRequest::new();
-    params.fields(vec![
-        MultipartField::param("client_id", client_id.to_string()),
-        MultipartField::param("oauth_token", access_token.to_string()),
-    ]);
+    let mut params = reqwest::multipart::Form::new()
+        .text("client_id", client_id.to_string())
+        .text("oauth_token", access_token.to_string());
     for (key, value) in metadata {
-        params = params.field(MultipartField::param(format!("track[{}]", key), value.to_string()));
+        params = params.text(format!("track[{}]", key), value.to_string());
     }
     // Not being able to access the specified files is a panic because the caller should have made
     // sure that they exist
-    params = params.field(
-        MultipartField::file("track[asset_data]", &file_path)
-            .map_err(|err| format!("failed to open audio file {}: {}", util::path_to_str(&file_path), err))
-            .unwrap(),
-    );
+    params = params
+        .file("track[asset_data]", &file_path)
+        .map_err(|err| format!("failed to open audio file {}: {}", util::path_to_str(&file_path), err))
+        .unwrap();
     if let &Some(ref artwork_path) = artwork_path {
-        params = params.field(
-            MultipartField::file("track[artwork_data]", artwork_path)
-                .map_err(|err| {
-                    format!(
-                        "failed to open artwork file {}: {}",
-                        util::path_to_str(artwork_path),
-                        err
-                    )
-                })
-                .unwrap(),
-        );
+        params = params
+            .file("track[artwork_data]", artwork_path)
+            .map_err(|err| {
+                format!(
+                    "failed to open artwork file {}: {}",
+                    util::path_to_str(artwork_path),
+                    err
+                )
+            })
+            .unwrap();
     }
     let track: Track = request_client
         .post(SOUNDCLOUD_API_UPLOAD)
-        .unwrap()
         .multipart(params)
         .send()
         .map_err(|err| format!("failed to send upload request: {}", err))

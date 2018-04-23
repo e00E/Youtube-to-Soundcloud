@@ -2,13 +2,13 @@ extern crate reqwest;
 #[macro_use]
 extern crate serde_derive;
 
-extern crate serde;
-extern crate serde_json;
 extern crate backoff;
 extern crate chrono;
+extern crate serde;
+extern crate serde_json;
 
-use std::str::FromStr;
 use chrono::Datelike;
+use std::str::FromStr;
 
 mod config;
 mod soundcloud;
@@ -22,7 +22,6 @@ fn default_backoff() -> backoff::ExponentialBackoff {
         ..Default::default()
     }
 }
-
 
 struct App {
     config: config::Config,
@@ -98,10 +97,9 @@ impl App {
 
     fn download_audio(video: &youtube::PlaylistItem) -> String {
         println!(
-                    "Downloading new video with id {} and title {}.",
-                    &video.contentDetails.videoId,
-                    &video.snippet.title,
-                );
+            "Downloading new video with id {} and title {}.",
+            &video.contentDetails.videoId, &video.snippet.title,
+        );
         let mut op = || {
             youtube::download_audio(&video.contentDetails.videoId).map_err(|err| {
                 println!("Error: {}\nRetrying...", err);
@@ -130,9 +128,10 @@ impl App {
                     })
                     .and_then(|_| Ok(path))
             } else {
-                Err(backoff::Error::Permanent(
-                    format!("thumbnail has illegal extension {}", extension),
-                ))
+                Err(backoff::Error::Permanent(format!(
+                    "thumbnail has illegal extension {}",
+                    extension
+                )))
             }
         };
 
@@ -156,26 +155,22 @@ impl App {
                 .unwrap()
                 .send()
                 .map_err(|err| {
-                    backoff::Error::Transient(format!(
-                        "failed to send youtube playlist get request: {}",
-                        err
-                    ))
+                    backoff::Error::Transient(format!("failed to send youtube playlist get request: {}", err))
                 })
                 .and_then(|response| match response.status() {
                     status if status.is_success() => Ok(response),
-                    status if status.is_client_error() => Err(backoff::Error::Permanent(
-                        format!("response indicates client error: {}", status),
-                    )),
-                    status => Err(backoff::Error::Transient(
-                        format!("response indicates server error: {}", status),
-                    )),
+                    status if status.is_client_error() => Err(backoff::Error::Permanent(format!(
+                        "response indicates client error: {}",
+                        status
+                    ))),
+                    status => Err(backoff::Error::Transient(format!(
+                        "response indicates server error: {}",
+                        status
+                    ))),
                 })?
                 .json()
                 .map_err(|err| {
-                    backoff::Error::Transient(format!(
-                        "failed to parse youtube playlist get response: {}",
-                        err
-                    ))
+                    backoff::Error::Transient(format!("failed to parse youtube playlist get response: {}", err))
                 })
                 .map_err(|err| match err {
                     backoff::Error::Transient(err) => {
@@ -188,7 +183,7 @@ impl App {
         backoff::Operation::retry(&mut op, &mut default_backoff()).map_err(|err| {
             format!(
                 "could not get the youtube playlist: {}. \
-                            Make sure the id is set correctly in the config file.",
+                 Make sure the id is set correctly in the config file.",
                 err
             )
         })
@@ -215,14 +210,11 @@ impl App {
                 metadata.insert("release_month", &month);
                 metadata.insert("release_day", &day);
             }
-            Err(err) => {
-                println!(
-                    "Failed to parse timedate string {}, \
-                             release date will not be set on Soundcloud: {}.",
-                    &video.snippet.publishedAt,
-                    err
-                )
-            }
+            Err(err) => println!(
+                "Failed to parse timedate string {}, \
+                 release date will not be set on Soundcloud: {}.",
+                &video.snippet.publishedAt, err
+            ),
         }
         metadata.insert("downloadable", "1");
         let mut op = || {
@@ -286,11 +278,9 @@ impl App {
         match backoff::Operation::retry(&mut op, &mut default_backoff()).unwrap() {
             Some(url) => Ok(url),
             None => {
-                return Err(
-                    "The Soundcloud playlist url is not valid. \
-                                Make sure you correctly set the full url in the config file."
-                        .to_string(),
-                );
+                return Err("The Soundcloud playlist url is not valid. \
+                            Make sure you correctly set the full url in the config file."
+                    .to_string());
             }
         }
     }
@@ -298,10 +288,7 @@ impl App {
     fn run(&mut self) -> Result<(), String> {
         println!();
         for playlist in self.playlists.playlists.iter() {
-            println!(
-                "Starting work on Youtube playlist with id: {}.",
-                playlist.youtube
-            );
+            println!("Starting work on Youtube playlist with id: {}.", playlist.youtube);
 
             let soundcloud_playlist_api_url = self.resolve_soundcloud_playlist_url(&playlist.soundcloud)?;
 
@@ -310,9 +297,10 @@ impl App {
             loop {
                 let resource = self.get_youtube_playlist_data(url.clone())?;
 
-                for video in resource.items.iter().filter(|x| {
-                    x.snippet.position >= previous_position
-                })
+                for video in resource
+                    .items
+                    .iter()
+                    .filter(|x| x.snippet.position >= previous_position)
                 {
                     let filename = App::download_audio(&video);
 
@@ -328,8 +316,8 @@ impl App {
                 }
                 match resource.nextPageToken {
                     Some(token) => {
-                        url = youtube::make_playlist_items_url(&playlist.youtube, &self.config.youtube_api_key)
-                            .unwrap();
+                        url =
+                            youtube::make_playlist_items_url(&playlist.youtube, &self.config.youtube_api_key).unwrap();
                         url.query_pairs_mut().append_pair("pageToken", &token);
                         continue;
                     }

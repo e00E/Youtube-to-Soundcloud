@@ -14,7 +14,7 @@ pub fn handle_status_code(response: reqwest::Response) -> Result<reqwest::Respon
         // let mut body: String = String::new();
         // let result = response.read_to_string(&mut body);
         Err(format!(
-            "response has bad status code: {}",//, body: {}",
+            "response has bad status code: {}", //, body: {}",
             response.status(),
             //if result.is_ok() { body } else { body }
         ))
@@ -26,9 +26,7 @@ pub fn download_file<T: AsRef<std::path::Path>>(url: &str, path: T, client: &req
         .get(url)
         .unwrap()
         .send()
-        .map_err(|err| {
-            format!("download file request {} failed: {}", url, err)
-        })
+        .map_err(|err| format!("download file request {} failed: {}", url, err))
         .and_then(handle_status_code)
         .and_then(|mut response| {
             let mut file = std::fs::OpenOptions::new()
@@ -43,14 +41,7 @@ pub fn download_file<T: AsRef<std::path::Path>>(url: &str, path: T, client: &req
                     )
                 })?;
             std::io::copy(&mut response, &mut file)
-                .map_err(|err| {
-                    format!(
-                        "failed to write {} to file {}: {}",
-                        url,
-                        path_to_str(&path),
-                        err
-                    )
-                })
+                .map_err(|err| format!("failed to write {} to file {}: {}", url, path_to_str(&path), err))
                 .and_then(|_| Ok(()))
         })
 }

@@ -1,9 +1,9 @@
 extern crate reqwest;
 
+use reqwest::StatusCode;
 use std;
 use std::collections::HashMap;
 use util;
-use reqwest::StatusCode;
 
 const SOUNDCLOUD_API_TOKEN: &str = "https://api.soundcloud.com/oauth2/token";
 const SOUNDCLOUD_API_RESOLVE: &str = "https://api.soundcloud.com/resolve.json";
@@ -53,16 +53,12 @@ pub fn authenticate(
         .form(&params)
         .unwrap()
         .send()
-        .map_err(|err| {
-            format!("failed to send authenticate request: {}", err)
-        })?;
+        .map_err(|err| format!("failed to send authenticate request: {}", err))?;
     match response.status() {
         StatusCode::Unauthorized => Ok(None),
-        other if other.is_success() => {
-            response.json().map_err(|err| {
-                format!("failed to parse authenticate response: {}", err)
-            })
-        }
+        other if other.is_success() => response
+            .json()
+            .map_err(|err| format!("failed to parse authenticate response: {}", err)),
         other => Err(format!("response has bad status code: {}", other)),
     }
 }
@@ -72,9 +68,11 @@ pub fn is_token_valid(client_id: &str, access_token: &str, request_client: &reqw
         SOUNDCLOUD_API_ME,
         &[("client_id", client_id), ("oauth_token", access_token)],
     ).expect("creation of me url failed");
-    let response = request_client.get(url).unwrap().send().map_err(|err| {
-        format!("failed to send resolve request: {}", err)
-    })?;
+    let response = request_client
+        .get(url)
+        .unwrap()
+        .send()
+        .map_err(|err| format!("failed to send resolve request: {}", err))?;
     match response.status() {
         StatusCode::Unauthorized => Ok(false),
         other if other.is_success() => Ok(true),
@@ -87,20 +85,18 @@ pub fn resolve(
     client_id: &str,
     request_client: &reqwest::Client,
 ) -> Result<Option<ResolveResponse>, String> {
-    let url = reqwest::Url::parse_with_params(
-        SOUNDCLOUD_API_RESOLVE,
-        &[("url", url), ("client_id", client_id)],
-    ).expect("creation of resolve url failed");
-    let mut response = request_client.get(url).unwrap().send().map_err(|err| {
-        format!("failed to send resolve request: {}", err)
-    })?;
+    let url = reqwest::Url::parse_with_params(SOUNDCLOUD_API_RESOLVE, &[("url", url), ("client_id", client_id)])
+        .expect("creation of resolve url failed");
+    let mut response = request_client
+        .get(url)
+        .unwrap()
+        .send()
+        .map_err(|err| format!("failed to send resolve request: {}", err))?;
     match response.status() {
         StatusCode::NotFound => Ok(None),
-        StatusCode::Found => {
-            response.json().map_err(|err| {
-                format!("failed to parse resolve response: {}", err)
-            })
-        }
+        StatusCode::Found => response
+            .json()
+            .map_err(|err| format!("failed to parse resolve response: {}", err)),
         other => Err(format!("response has bad status code: {}", other)),
     }
 }
@@ -118,10 +114,8 @@ pub fn get_tracks(
     client_id: &str,
     request_client: &reqwest::Client,
 ) -> Result<PlaylistGetResponse, String> {
-    let url = reqwest::Url::parse_with_params(
-        playlist_api_url,
-        &[("client_id", client_id), ("representation", "id")],
-    ).expect("creation of playlist url failed");
+    let url = reqwest::Url::parse_with_params(playlist_api_url, &[("client_id", client_id), ("representation", "id")])
+        .expect("creation of playlist url failed");
     request_client
         .get(url)
         .unwrap()
@@ -129,9 +123,7 @@ pub fn get_tracks(
         .map_err(|err| format!("failed to send get tracks request: {}", err))
         .and_then(util::handle_status_code)?
         .json()
-        .map_err(|err| {
-            format!("failed to parse of get tracks response: {}", err)
-        })
+        .map_err(|err| format!("failed to parse of get tracks response: {}", err))
 }
 
 pub fn add_to_playlist(
@@ -141,8 +133,7 @@ pub fn add_to_playlist(
     access_token: &str,
     request_client: &reqwest::Client,
 ) -> Result<(), String> {
-    let previous_tracks = get_tracks(playlist_api_url, client_id, request_client)?
-        .tracks;
+    let previous_tracks = get_tracks(playlist_api_url, client_id, request_client)?.tracks;
     let track_id = format!("{}", track_id);
     let mut params = vec![
         ("client_id", client_id.to_string()),
@@ -159,9 +150,7 @@ pub fn add_to_playlist(
         .form(&params)
         .unwrap()
         .send()
-        .map_err(|err| {
-            format!("failed to send playlist put request: {}", err)
-        })
+        .map_err(|err| format!("failed to send playlist put request: {}", err))
         .and_then(util::handle_status_code)
         .and_then(|_| Ok(()))
 }
@@ -177,32 +166,17 @@ pub fn upload<T: AsRef<std::path::Path>, U: AsRef<std::path::Path>>(
     use reqwest::MultipartField;
     let mut params = reqwest::MultipartRequest::new();
     params.fields(vec![
-        MultipartField::param(
-            "client_id",
-            client_id.to_string()
-        ),
-        MultipartField::param(
-            "oauth_token",
-            access_token.to_string()
-        ),
+        MultipartField::param("client_id", client_id.to_string()),
+        MultipartField::param("oauth_token", access_token.to_string()),
     ]);
     for (key, value) in metadata {
-        params = params.field(MultipartField::param(
-            format!("track[{}]", key),
-            value.to_string(),
-        ));
+        params = params.field(MultipartField::param(format!("track[{}]", key), value.to_string()));
     }
     // Not being able to access the specified files is a panic because the caller should have made
     // sure that they exist
     params = params.field(
         MultipartField::file("track[asset_data]", &file_path)
-            .map_err(|err| {
-                format!(
-                    "failed to open audio file {}: {}",
-                    util::path_to_str(&file_path),
-                    err
-                )
-            })
+            .map_err(|err| format!("failed to open audio file {}: {}", util::path_to_str(&file_path), err))
             .unwrap(),
     );
     if let &Some(ref artwork_path) = artwork_path {

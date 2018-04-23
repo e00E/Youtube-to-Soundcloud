@@ -8,7 +8,6 @@ pub const PLAYLISTS_BACKUP_FILE: &str = "playlists_backup.json";
 pub const CONFIG_FILE: &str = "config.json";
 pub const CONFIG_BACKUP_FILE: &str = "config_backup.json";
 
-
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
@@ -54,15 +53,12 @@ impl Playlists {
     }
 
     pub fn write_safe(&self) -> Result<(), String> {
-        std::fs::rename(PLAYLISTS_FILE, PLAYLISTS_BACKUP_FILE)
-            .map_err(|err| {
-                format!(
-                    "failed to rename {} to {}: {}",
-                    PLAYLISTS_FILE,
-                    PLAYLISTS_BACKUP_FILE,
-                    err
-                )
-            })?;
+        std::fs::rename(PLAYLISTS_FILE, PLAYLISTS_BACKUP_FILE).map_err(|err| {
+            format!(
+                "failed to rename {} to {}: {}",
+                PLAYLISTS_FILE, PLAYLISTS_BACKUP_FILE, err
+            )
+        })?;
         self.write(PLAYLISTS_FILE)
     }
 }
@@ -70,11 +66,10 @@ impl Playlists {
 impl Config {
     pub fn read() -> Result<Config, String> {
         let path = CONFIG_FILE;
-        let file = std::fs::OpenOptions::new().read(true).open(path).map_err(
-            |err| {
-                format!("failed to open {}: {}", path, err)
-            },
-        )?;
+        let file = std::fs::OpenOptions::new()
+            .read(true)
+            .open(path)
+            .map_err(|err| format!("failed to open {}: {}", path, err))?;
         serde_json::from_reader(file).map_err(|err| format!("failed to parse {}: {}", path, err))
     }
 
@@ -88,16 +83,8 @@ impl Config {
     }
 
     pub fn write_safe(&self) -> Result<(), String> {
-        std::fs::rename(CONFIG_FILE, CONFIG_BACKUP_FILE).map_err(
-            |err| {
-                format!(
-                    "failed to rename {} to {}: {}",
-                    CONFIG_FILE,
-                    CONFIG_BACKUP_FILE,
-                    err
-                )
-            },
-        )?;
+        std::fs::rename(CONFIG_FILE, CONFIG_BACKUP_FILE)
+            .map_err(|err| format!("failed to rename {} to {}: {}", CONFIG_FILE, CONFIG_BACKUP_FILE, err))?;
         self.write(CONFIG_FILE)
     }
 }

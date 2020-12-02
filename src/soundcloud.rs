@@ -1,9 +1,7 @@
-extern crate reqwest;
-
+use crate::util;
 use reqwest::StatusCode;
-use std;
+use serde::Deserialize;
 use std::collections::HashMap;
-use util;
 
 const SOUNDCLOUD_API_TOKEN: &str = "https://api.soundcloud.com/oauth2/token";
 const SOUNDCLOUD_API_RESOLVE: &str = "https://api.soundcloud.com/resolve.json";
@@ -53,7 +51,7 @@ pub fn authenticate(
         .send()
         .map_err(|err| format!("failed to send authenticate request: {}", err))?;
     match response.status() {
-        StatusCode::Unauthorized => Ok(None),
+        StatusCode::UNAUTHORIZED => Ok(None),
         other if other.is_success() => response
             .json()
             .map_err(|err| format!("failed to parse authenticate response: {}", err)),
@@ -61,17 +59,22 @@ pub fn authenticate(
     }
 }
 
-pub fn is_token_valid(client_id: &str, access_token: &str, request_client: &reqwest::Client) -> Result<bool, String> {
+pub fn is_token_valid(
+    client_id: &str,
+    access_token: &str,
+    request_client: &reqwest::Client,
+) -> Result<bool, String> {
     let url = reqwest::Url::parse_with_params(
         SOUNDCLOUD_API_ME,
         &[("client_id", client_id), ("oauth_token", access_token)],
-    ).expect("creation of me url failed");
+    )
+    .expect("creation of me url failed");
     let response = request_client
         .get(url)
         .send()
         .map_err(|err| format!("failed to send resolve request: {}", err))?;
     match response.status() {
-        StatusCode::Unauthorized => Ok(false),
+        StatusCode::UNAUTHORIZED => Ok(false),
         other if other.is_success() => Ok(true),
         other => Err(format!("response has bad status code: {}", other)),
     }
@@ -82,15 +85,18 @@ pub fn resolve(
     client_id: &str,
     request_client: &reqwest::Client,
 ) -> Result<Option<ResolveResponse>, String> {
-    let url = reqwest::Url::parse_with_params(SOUNDCLOUD_API_RESOLVE, &[("url", url), ("client_id", client_id)])
-        .expect("creation of resolve url failed");
+    let url = reqwest::Url::parse_with_params(
+        SOUNDCLOUD_API_RESOLVE,
+        &[("url", url), ("client_id", client_id)],
+    )
+    .expect("creation of resolve url failed");
     let mut response = request_client
         .get(url)
         .send()
         .map_err(|err| format!("failed to send resolve request: {}", err))?;
     match response.status() {
-        StatusCode::NotFound => Ok(None),
-        StatusCode::Found => response
+        StatusCode::NOT_FOUND => Ok(None),
+        StatusCode::FOUND => response
             .json()
             .map_err(|err| format!("failed to parse resolve response: {}", err)),
         other => Err(format!("response has bad status code: {}", other)),
@@ -102,7 +108,8 @@ pub fn playlist_url_to_api_url(
     client_id: &str,
     request_client: &reqwest::Client,
 ) -> Result<Option<String>, String> {
-    resolve(url, client_id, request_client).and_then(|response| Ok(response.map(|response| response.location)))
+    resolve(url, client_id, request_client)
+        .and_then(|response| Ok(response.map(|response| response.location)))
 }
 
 pub fn get_tracks(
@@ -110,8 +117,11 @@ pub fn get_tracks(
     client_id: &str,
     request_client: &reqwest::Client,
 ) -> Result<PlaylistGetResponse, String> {
-    let url = reqwest::Url::parse_with_params(playlist_api_url, &[("client_id", client_id), ("representation", "id")])
-        .expect("creation of playlist url failed");
+    let url = reqwest::Url::parse_with_params(
+        playlist_api_url,
+        &[("client_id", client_id), ("representation", "id")],
+    )
+    .expect("creation of playlist url failed");
     request_client
         .get(url)
         .send()
@@ -166,7 +176,13 @@ pub fn upload<T: AsRef<std::path::Path>, U: AsRef<std::path::Path>>(
     // sure that they exist
     params = params
         .file("track[asset_data]", &file_path)
-        .map_err(|err| format!("failed to open audio file {}: {}", util::path_to_str(&file_path), err))
+        .map_err(|err| {
+            format!(
+                "failed to open audio file {}: {}",
+                util::path_to_str(&file_path),
+                err
+            )
+        })
         .unwrap();
     if let &Some(ref artwork_path) = artwork_path {
         params = params

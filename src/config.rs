@@ -1,7 +1,4 @@
-extern crate serde;
-extern crate serde_json;
-
-use std;
+use serde::{Deserialize, Serialize};
 
 pub const PLAYLISTS_FILE: &str = "playlists.json";
 pub const PLAYLISTS_BACKUP_FILE: &str = "playlists_backup.json";
@@ -40,7 +37,8 @@ impl Playlists {
             .read(true)
             .open(PLAYLISTS_FILE)
             .map_err(|err| format!("failed to open {}: {}", PLAYLISTS_FILE, err))?;
-        serde_json::from_reader(file).map_err(|err| format!("failed to parse {}: {}", PLAYLISTS_FILE, err))
+        serde_json::from_reader(file)
+            .map_err(|err| format!("failed to parse {}: {}", PLAYLISTS_FILE, err))
     }
 
     pub fn write(&self, path: &str) -> Result<(), String> {
@@ -49,7 +47,8 @@ impl Playlists {
             .create_new(true)
             .open(path)
             .map_err(|err| format!("failed to open {}: {}", path, err))?;
-        serde_json::to_writer_pretty(file, self).map_err(|err| format!("failed to write to {}: {}", path, err))
+        serde_json::to_writer_pretty(file, self)
+            .map_err(|err| format!("failed to write to {}: {}", path, err))
     }
 
     pub fn write_safe(&self) -> Result<(), String> {
@@ -79,12 +78,17 @@ impl Config {
             .create_new(true)
             .open(path)
             .map_err(|err| format!("failed to open {}: {}", path, err))?;
-        serde_json::to_writer_pretty(file, self).map_err(|err| format!("failed to write to {}: {}", path, err))
+        serde_json::to_writer_pretty(file, self)
+            .map_err(|err| format!("failed to write to {}: {}", path, err))
     }
 
     pub fn write_safe(&self) -> Result<(), String> {
-        std::fs::rename(CONFIG_FILE, CONFIG_BACKUP_FILE)
-            .map_err(|err| format!("failed to rename {} to {}: {}", CONFIG_FILE, CONFIG_BACKUP_FILE, err))?;
+        std::fs::rename(CONFIG_FILE, CONFIG_BACKUP_FILE).map_err(|err| {
+            format!(
+                "failed to rename {} to {}: {}",
+                CONFIG_FILE, CONFIG_BACKUP_FILE, err
+            )
+        })?;
         self.write(CONFIG_FILE)
     }
 }

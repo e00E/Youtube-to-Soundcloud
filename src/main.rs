@@ -1,12 +1,3 @@
-extern crate reqwest;
-#[macro_use]
-extern crate serde_derive;
-
-extern crate backoff;
-extern crate chrono;
-extern crate serde;
-extern crate serde_json;
-
 use chrono::Datelike;
 use std::str::FromStr;
 
@@ -33,23 +24,25 @@ struct App {
 impl App {
     fn new() -> Result<App, String> {
         let mut config = config::Config::read()?;
-        let mut client = reqwest::ClientBuilder::new();
         // Currently soundclouds playlisturl to api url needs redirects to be disabled for resolve to
         // work correctly.
-        client.redirect(reqwest::RedirectPolicy::none());
-        client.timeout(std::time::Duration::new(256, 0));
+        let client = reqwest::ClientBuilder::new()
+            .redirect(reqwest::RedirectPolicy::none())
+            .timeout(std::time::Duration::new(256, 0))
+            .build()
+            .unwrap();
         // For debugging with Fiddler:
         // client.proxy(reqwest::Proxy::https("http://localhost:8888").unwrap());
-        let client = client.build().unwrap();
 
         println!("Checking validity of existing Soundcloud access token.");
         let need_new_token = match config.soundcloud_access_token {
             Some(ref access_token) => {
                 let mut op = || {
-                    soundcloud::is_token_valid(&config.soundcloud_client_id, access_token, &client).map_err(|err| {
-                        println!("Error: {}\nRetrying...", err);
-                        backoff::Error::Transient(err)
-                    })
+                    soundcloud::is_token_valid(&config.soundcloud_client_id, access_token, &client)
+                        .map_err(|err| {
+                            println!("Error: {}\nRetrying...", err);
+                            backoff::Error::Transient(err)
+                        })
                 };
                 !backoff::Operation::retry(&mut op, &mut default_backoff()).unwrap()
             }
@@ -65,7 +58,8 @@ impl App {
                     &config.soundcloud_username,
                     &config.soundcloud_password,
                     &client,
-                ).map_err(|err| {
+                )
+                .map_err(|err| {
                     println!("Error: {}\nRetrying...", err);
                     backoff::Error::Transient(err)
                 })
@@ -147,14 +141,20 @@ impl App {
         }
     }
 
-    fn get_youtube_playlist_data(&self, url: reqwest::Url) -> Result<youtube::PlaylistItemsResource, String> {
+    fn get_youtube_playlist_data(
+        &self,
+        url: reqwest::Url,
+    ) -> Result<youtube::PlaylistItemsResource, String> {
         println!("Getting Youtube playlist data.");
         let mut op = || -> Result<youtube::PlaylistItemsResource, backoff::Error<String>> {
             self.client
                 .get(url.clone())
                 .send()
                 .map_err(|err| {
-                    backoff::Error::Transient(format!("failed to send youtube playlist get request: {}", err))
+                    backoff::Error::Transient(format!(
+                        "failed to send youtube playlist get request: {}",
+                        err
+                    ))
                 })
                 .and_then(|response| match response.status() {
                     status if status.is_success() => Ok(response),
@@ -169,7 +169,10 @@ impl App {
                 })?
                 .json()
                 .map_err(|err| {
-                    backoff::Error::Transient(format!("failed to parse youtube playlist get response: {}", err))
+                    backoff::Error::Transient(format!(
+                        "failed to parse youtube playlist get response: {}",
+                        err
+                    ))
                 })
                 .map_err(|err| match err {
                     backoff::Error::Transient(err) => {
@@ -188,7 +191,12 @@ impl App {
         })
     }
 
-    fn upload_audio(&self, audio_path: &str, video: &youtube::PlaylistItem, thumbnail_path: &Option<String>) -> u64 {
+    fn upload_audio(
+        &self,
+        audio_path: &str,
+        video: &youtube::PlaylistItem,
+        thumbnail_path: &Option<String>,
+    ) -> u64 {
         println!("Uploading {} to Soundcloud.", audio_path);
         let year;
         let month;
@@ -198,7 +206,8 @@ impl App {
         metadata.insert("title", &video.snippet.title);
         metadata.insert("description", &video.snippet.description);
         metadata.insert("downloadable", "1");
-        let datetime = chrono::DateTime::<chrono::offset::Utc>::from_str(&video.snippet.publishedAt);
+        let datetime =
+            chrono::DateTime::<chrono::offset::Utc>::from_str(&video.snippet.publishedAt);
         match datetime {
             Ok(datetime) => {
                 let date = datetime.date();
@@ -224,7 +233,8 @@ impl App {
                 &self.config.soundcloud_client_id,
                 &self.access_token,
                 &self.client,
-            ).map_err(|err| {
+            )
+            .map_err(|err| {
                 println!("Error: {}\nRetrying...", err);
                 backoff::Error::Transient(err)
             })
@@ -258,7 +268,8 @@ impl App {
                 &self.config.soundcloud_client_id,
                 &self.access_token,
                 &self.client,
-            ).map_err(|err| {
+            )
+            .map_err(|err| {
                 println!("Error: {}\nRetrying...", err);
                 backoff::Error::Transient(err)
             })
@@ -269,7 +280,12 @@ impl App {
     fn resolve_soundcloud_playlist_url(&self, url: &str) -> Result<String, String> {
         println!("Resolving Soundcloud playlist url {}.", url);
         let mut op = || {
-            soundcloud::playlist_url_to_api_url(&url, &self.config.soundcloud_client_id, &self.client).map_err(|err| {
+            soundcloud::playlist_url_to_api_url(
+                &url,
+                &self.config.soundcloud_client_id,
+                &self.client,
+            )
+            .map_err(|err| {
                 println!("Error: {}\nRetrying...", err);
                 backoff::Error::Transient(err)
             })
@@ -287,11 +303,17 @@ impl App {
     fn run(&mut self) -> Result<(), String> {
         println!();
         for playlist in self.playlists.playlists.iter() {
-            println!("Starting work on Youtube playlist with id: {}.", playlist.youtube);
+            println!(
+                "Starting work on Youtube playlist with id: {}.",
+                playlist.youtube
+            );
 
-            let soundcloud_playlist_api_url = self.resolve_soundcloud_playlist_url(&playlist.soundcloud)?;
+            let soundcloud_playlist_api_url =
+                self.resolve_soundcloud_playlist_url(&playlist.soundcloud)?;
 
-            let mut url = youtube::make_playlist_items_url(&playlist.youtube, &self.config.youtube_api_key).unwrap();
+            let mut url =
+                youtube::make_playlist_items_url(&playlist.youtube, &self.config.youtube_api_key)
+                    .unwrap();
             let previous_position = playlist.position.get();
             loop {
                 let resource = self.get_youtube_playlist_data(url.clone())?;
@@ -315,8 +337,11 @@ impl App {
                 }
                 match resource.nextPageToken {
                     Some(token) => {
-                        url =
-                            youtube::make_playlist_items_url(&playlist.youtube, &self.config.youtube_api_key).unwrap();
+                        url = youtube::make_playlist_items_url(
+                            &playlist.youtube,
+                            &self.config.youtube_api_key,
+                        )
+                        .unwrap();
                         url.query_pairs_mut().append_pair("pageToken", &token);
                         continue;
                     }

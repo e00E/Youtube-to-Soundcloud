@@ -1,2 +1,4 @@
 target/
 /Cargo.lock
+dev_config.json
+dev_playlists.json

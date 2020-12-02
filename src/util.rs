@@ -1,8 +1,10 @@
+use reqwest::blocking::{Client, Response};
+
 pub fn path_to_str<T: AsRef<std::path::Path>>(path: T) -> String {
     path.as_ref().to_string_lossy().into_owned()
 }
 
-pub fn handle_status_code(response: reqwest::Response) -> Result<reqwest::Response, String> {
+pub fn handle_status_code(response: Response) -> Result<Response, String> {
     if response.status().is_success() {
         Ok(response)
     } else {
@@ -16,7 +18,7 @@ pub fn handle_status_code(response: reqwest::Response) -> Result<reqwest::Respon
 pub fn download_file<T: AsRef<std::path::Path>>(
     url: &str,
     path: T,
-    client: &reqwest::Client,
+    client: &Client,
 ) -> Result<(), String> {
     client
         .get(url)

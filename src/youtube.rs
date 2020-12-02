@@ -5,7 +5,7 @@ pub const YOUTUBE_API_PLAYLIST_ITEMS: &str = "https://www.googleapis.com/youtube
 pub fn make_playlist_items_url(
     id: &str,
     youtube_api_key: &str,
-) -> Result<reqwest::Url, reqwest::UrlError> {
+) -> Result<reqwest::Url, url::ParseError> {
     reqwest::Url::parse_with_params(
         YOUTUBE_API_PLAYLIST_ITEMS,
         &[

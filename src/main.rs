@@ -1,4 +1,5 @@
 use chrono::Datelike;
+use reqwest::blocking::Client;
 use std::str::FromStr;
 
 mod config;
@@ -17,7 +18,7 @@ fn default_backoff() -> backoff::ExponentialBackoff {
 struct App {
     config: config::Config,
     playlists: config::Playlists,
-    client: reqwest::Client,
+    client: Client,
     access_token: String,
 }
 
@@ -26,8 +27,8 @@ impl App {
         let mut config = config::Config::read()?;
         // Currently soundclouds playlisturl to api url needs redirects to be disabled for resolve to
         // work correctly.
-        let client = reqwest::ClientBuilder::new()
-            .redirect(reqwest::RedirectPolicy::none())
+        let client = reqwest::blocking::ClientBuilder::new()
+            .redirect(reqwest::redirect::Policy::none())
             .timeout(std::time::Duration::new(256, 0))
             .build()
             .unwrap();

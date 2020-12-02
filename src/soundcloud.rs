@@ -1,5 +1,8 @@
 use crate::util;
-use reqwest::StatusCode;
+use reqwest::{
+    blocking::{multipart::Form, Client},
+    StatusCode,
+};
 use serde::Deserialize;
 use std::collections::HashMap;
 
@@ -36,7 +39,7 @@ pub fn authenticate(
     client_secret: &str,
     username: &str,
     password: &str,
-    request_client: &reqwest::Client,
+    request_client: &Client,
 ) -> Result<Option<AuthenticateResponse>, String> {
     let mut params = HashMap::new();
     params.insert("client_id", client_id);
@@ -45,7 +48,7 @@ pub fn authenticate(
     params.insert("password", password);
     params.insert("grant_type", "password");
     params.insert("scope", "non-expiring");
-    let mut response = request_client
+    let response = request_client
         .post(SOUNDCLOUD_API_TOKEN)
         .form(&params)
         .send()
@@ -62,7 +65,7 @@ pub fn authenticate(
 pub fn is_token_valid(
     client_id: &str,
     access_token: &str,
-    request_client: &reqwest::Client,
+    request_client: &Client,
 ) -> Result<bool, String> {
     let url = reqwest::Url::parse_with_params(
         SOUNDCLOUD_API_ME,
@@ -83,14 +86,14 @@ pub fn is_token_valid(
 pub fn resolve(
     url: &str,
     client_id: &str,
-    request_client: &reqwest::Client,
+    request_client: &Client,
 ) -> Result<Option<ResolveResponse>, String> {
     let url = reqwest::Url::parse_with_params(
         SOUNDCLOUD_API_RESOLVE,
         &[("url", url), ("client_id", client_id)],
     )
     .expect("creation of resolve url failed");
-    let mut response = request_client
+    let response = request_client
         .get(url)
         .send()
         .map_err(|err| format!("failed to send resolve request: {}", err))?;
@@ -106,7 +109,7 @@ pub fn resolve(
 pub fn playlist_url_to_api_url(
     url: &str,
     client_id: &str,
-    request_client: &reqwest::Client,
+    request_client: &Client,
 ) -> Result<Option<String>, String> {
     resolve(url, client_id, request_client)
         .map(|response| response.map(|response| response.location))
@@ -115,7 +118,7 @@ pub fn playlist_url_to_api_url(
 pub fn get_tracks(
     playlist_api_url: &str,
     client_id: &str,
-    request_client: &reqwest::Client,
+    request_client: &Client,
 ) -> Result<PlaylistGetResponse, String> {
     let url = reqwest::Url::parse_with_params(
         playlist_api_url,
@@ -136,7 +139,7 @@ pub fn add_to_playlist(
     playlist_api_url: &str,
     client_id: &str,
     access_token: &str,
-    request_client: &reqwest::Client,
+    request_client: &Client,
 ) -> Result<(), String> {
     let previous_tracks = get_tracks(playlist_api_url, client_id, request_client)?.tracks;
     let track_id = format!("{}", track_id);
@@ -164,9 +167,9 @@ pub fn upload<T: AsRef<std::path::Path>, U: AsRef<std::path::Path>>(
     metadata: &HashMap<&str, &str>,
     client_id: &str,
     access_token: &str,
-    request_client: &reqwest::Client,
+    request_client: &Client,
 ) -> Result<u64, String> {
-    let mut params = reqwest::multipart::Form::new()
+    let mut params = Form::new()
         .text("client_id", client_id.to_string())
         .text("oauth_token", access_token.to_string());
     for (key, value) in metadata {

@@ -44,6 +44,6 @@ pub fn download_file<T: AsRef<std::path::Path>>(
                         err
                     )
                 })
-                .and_then(|_| Ok(()))
+                .map(|_| ())
         })
 }

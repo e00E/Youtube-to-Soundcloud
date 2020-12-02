@@ -109,7 +109,7 @@ pub fn playlist_url_to_api_url(
     request_client: &reqwest::Client,
 ) -> Result<Option<String>, String> {
     resolve(url, client_id, request_client)
-        .and_then(|response| Ok(response.map(|response| response.location)))
+        .map(|response| response.map(|response| response.location))
 }
 
 pub fn get_tracks(
@@ -148,14 +148,14 @@ pub fn add_to_playlist(
     for track in previous_tracks.iter() {
         params.push(("playlist[tracks][][id]", track.id.to_string()));
     }
-    params.push(("playlist[tracks][][id]", track_id.to_string()));
+    params.push(("playlist[tracks][][id]", track_id));
     request_client
         .put(playlist_api_url)
         .form(&params)
         .send()
         .map_err(|err| format!("failed to send playlist put request: {}", err))
         .and_then(util::handle_status_code)
-        .and_then(|_| Ok(()))
+        .map(|_| ())
 }
 
 pub fn upload<T: AsRef<std::path::Path>, U: AsRef<std::path::Path>>(
@@ -184,7 +184,7 @@ pub fn upload<T: AsRef<std::path::Path>, U: AsRef<std::path::Path>>(
             )
         })
         .unwrap();
-    if let &Some(ref artwork_path) = artwork_path {
+    if let Some(artwork_path) = artwork_path {
         params = params
             .file("track[artwork_data]", artwork_path)
             .map_err(|err| {

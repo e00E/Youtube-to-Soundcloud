@@ -82,10 +82,10 @@ impl App {
         let playlists = config::Playlists::read()?;
 
         Ok(App {
-            config: config,
-            playlists: playlists,
-            client: client,
-            access_token: access_token,
+            config,
+            playlists,
+            client,
+            access_token,
         })
     }
 
@@ -108,19 +108,18 @@ impl App {
         let mut op = || {
             let url = &video.snippet.thumbnails.get_best_thumbnail().url;
             let allowed_extensions = &["jpg", "png"];
-            let start = url.rfind(".").ok_or(backoff::Error::Permanent(format!(
-                "thumbnail url {} has no extension",
-                url
-            )))?;
+            let start = url.rfind('.').ok_or_else(|| {
+                backoff::Error::Permanent(format!("thumbnail url {} has no extension", url))
+            })?;
             let extension = &url[start + 1..];
             if allowed_extensions.contains(&extension) {
-                let path = format!("thumbnail.{}", extension).to_string();
+                let path = format!("thumbnail.{}", extension);
                 util::download_file(url, &path, &self.client)
                     .map_err(|err| {
                         println!("Error: {}\nRetrying...", err);
                         backoff::Error::Transient(err)
                     })
-                    .and_then(|_| Ok(path))
+                    .map(|_| path)
             } else {
                 Err(backoff::Error::Permanent(format!(
                     "thumbnail has illegal extension {}",
@@ -241,7 +240,7 @@ impl App {
         };
         let audio_id = backoff::Operation::retry(&mut op, &mut default_backoff()).unwrap();
 
-        if let &Some(ref path) = thumbnail_path {
+        if let Some(path) = thumbnail_path {
             println!("Cleaning up thumbnail file.");
             if let Err(err) = std::fs::remove_file(path) {
                 println!("Error: {}\nFile will remain on disk.", err);
@@ -292,11 +291,9 @@ impl App {
         };
         match backoff::Operation::retry(&mut op, &mut default_backoff()).unwrap() {
             Some(url) => Ok(url),
-            None => {
-                return Err("The Soundcloud playlist url is not valid. \
+            None => Err("The Soundcloud playlist url is not valid. \
                             Make sure you correctly set the full url in the config file."
-                    .to_string());
-            }
+                .to_string()),
         }
     }
 

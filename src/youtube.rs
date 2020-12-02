@@ -32,7 +32,7 @@ pub fn download_audio(video_id: &str) -> Result<String, String> {
 
     let end = " has already been downloaded";
     let start = "[download] ";
-    for line in stdout.split("\n") {
+    for line in stdout.split('\n') {
         if line.starts_with(start) && line.ends_with(end) {
             return Ok(line[start.len()..line.len() - end.len()].to_string());
         }
@@ -41,9 +41,9 @@ pub fn download_audio(video_id: &str) -> Result<String, String> {
     let target = "[download] Destination: ";
     let start = stdout
         .find(target)
-        .ok_or(format!("youtube-dl failed to download anything"))?
+        .ok_or_else(|| "youtube-dl failed to download anything".to_string())?
         + target.len();
-    let end = stdout[start..].find("\n").unwrap();
+    let end = stdout[start..].find('\n').unwrap();
     Ok(stdout[start..start + end].to_string())
 }
 
@@ -100,8 +100,8 @@ impl Thumbnails {
         let thumbnails = &[&self.maxres, &self.standard, &self.high, &self.medium];
         for i in thumbnails.iter() {
             match *i {
-                &Some(ref t) => return t,
-                &None => continue,
+                Some(t) => return t,
+                None => continue,
             }
         }
         &self.default
